@@ -1,0 +1,1113 @@
+---
+title: "R Notebook for Sociality modulates context-dependent stress responses to anthropogenic disturbance in managed African elephants"
+author: "Kyla Funk"
+date: "March 09 2026"
+---
+
+###  Sociality modulates context-dependent stress responses to anthropogenic disturbance in managed African elephants 
+#### Kyla R. Funk 1, Levi Newediuk 2, Leslie R. Brown 3, Andre Ganswindt 4, Eric Vander Wal 1,5 
+
+# 1 Department of Cognitive and Behavioural Ecology, Memorial University of Newfoundland, Canada
+# 2 Department of Biological Sciences, University of Manitoba, Winnipeg, Canada
+# 3 Applied Behavioural Ecology and Ecosystems Research Unit, University of South Africa, Pretoria, South Africa
+# 4 Faculty of Natural and Agricultural Sciences, Mammal Research Institute, University of Pretoria, Pretoria, South Africa
+# 5 Department of Biology, Memorial University of Newfoundland, Canada
+
+#### Correspondence concerning this article should be addressed to Kyla Funk, Address: Memorial University of Newfoundland, Department of Cognitive and Behavioural Ecology, 1 Arctic Ave, St. John’s, NL, Canada. E-mail: krfunk@mun.ca
+---
+
+##Load libraries
+```{r}
+library(netTS)
+library(lubridate)
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+library(bayesplot)
+library(see)
+library(bayestestR)
+library(brms)
+library(DHARMa)
+library(performance)
+library(stringr)
+library(ggridges)
+library(RColorBrewer)
+library(ggpubr)
+library(tidybayes)
+library(modelr)
+library(openxlsx)
+```
+
+##look at data
+```{r load data}
+Stress2 <- read.xlsx("~/Documents/PhD/StressData/StressData/RawData.xlsx")
+
+Stress2 <- transform(Stress2, fGCM_Conc = as.numeric(fGCM_Conc))
+Stress2 <- transform(Stress2, Age = as.factor(Age))
+Stress2 <- transform(Stress2, Sex = as.factor(Sex))
+Stress2 <- transform(Stress2, AgeSex = as.factor(AgeSex))
+Stress2 <- transform(Stress2, X2_Break_In = as.factor(X2_Break_In))
+Stress2 <- transform(Stress2, X2_Water_Available = as.factor(X2_Water_Available))
+Stress2 <- transform(Stress2, X2_EventsOnFarm = as.factor(X2_EventsOnFarm))
+Stress2 <- transform(Stress2, X2_Stressor = as.factor(X2_Stressor))
+Stress2 <- transform(Stress2, X2_Specific_Season = as.factor(X2_Specific_Season))
+Stress2 <- transform(Stress2, X2_Wet_Dry = as.factor(X2_Wet_Dry))
+Stress2 <- transform(Stress2, X2_Plane = as.factor(X2_Plane))
+
+
+##Scaling all numeric variables
+Stress2$Dominance.s <- scale(Stress2$Dominance_Rank, center = TRUE, scale = TRUE)
+Stress2$X2_Temp_H.s <- scale(Stress2$X2_Temp_H, center = TRUE, scale = TRUE)
+Stress2$X2_Temp_A.s <- scale(Stress2$X2_Temp_A, center = TRUE, scale = TRUE)
+Stress2$X2_Temp_L.s <- scale(Stress2$X2_Temp_L, center = TRUE, scale = TRUE)
+Stress2$X2_WindSpeed_H.s <- scale(Stress2$X2_WindSpeed_H, center = TRUE, scale = TRUE)
+Stress2$X2_WindSpeed_A.s <- scale(Stress2$X2_WindSpeed_A, center = TRUE, scale = TRUE)
+Stress2$X2_Pressure_H.s <- scale(Stress2$X2_Pressure_H, center = TRUE, scale = TRUE)
+Stress2$X2_Pressure_L.s <- scale(Stress2$X2_Pressure_L, center = TRUE, scale = TRUE)
+Stress2$X2_Rainfall.s <- scale(Stress2$X2_Rainfall, center = TRUE, scale = TRUE)
+Stress2$X2_LOWHIGHDIFF.s <- scale(Stress2$X2_LOWHIGHDIFF, center = TRUE, scale = TRUE)
+Stress2$TotalAggressionsInitiatedStudyPeriod <- scale(Stress2$TotalAggressionsInitiatedStudyPeriod, center = TRUE, scale = TRUE)
+Stress2$TotalAggressionsReceivedStudyPeriod <- scale(Stress2$TotalAggressionsReceivedStudyPeriod, center = TRUE, scale = TRUE)
+Stress2$DifferenceInAggressionStudyPeriod <- scale(Stress2$DifferenceInAggressionStudyPeriod, center = TRUE, scale = TRUE)
+
+```
+
+##HYPOTHESIS 1#####
+#MODEL 1
+##Build biophysical model is fGCM concentration dependent on weather variables x,y,z
+```{r Build M1 H1 P1 model}
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M1.H1.P1.Stress <- bf(fGCM_Conc ~ X2_Rainfall.s + X2_WindSpeed_A.s + X2_Temp_A.s + X2_Water_Available + X2_Specific_Season + X2_LOWHIGHDIFF.s + X2_Pressure_H.s + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M1.H1.P1.Stress <- brm(M1.H1.P1.Stress, 
+data = Stress2, 
+family = skew_normal,
+prior=priors.BRMS.interceptb.norm, 
+save_pars = save_pars(all = TRUE),
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M1 H1 P1 model: is it a good fit?
+```{r Model 1 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+
+#PP_Checks
+# tiff("fit.M1.H1.P1.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M1.H1.P1.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M1.H1.P1.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M1.H1.P1.Stress, type = "stat")
+
+#Dispersion Tests
+# tiff("dispersionM1.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M1.H1.P1.Stress <- predict(fit.M1.H1.P1.Stress, summary = FALSE)
+PosteriorPredictions.fit.M1.H1.P1.Stress <- t(PosteriorPredictions.fit.M1.H1.P1.Stress)
+medianPosteriorPredictions.fit.M1.H1.P1.Stress <- apply(PosteriorPredictions.fit.M1.H1.P1.Stress, 1, median)
+observations.fit.M1.H1.P1.Stress <- Stress2$fGCM_Conc
+DharmaM2.bayes.fit.M1.H1.P1.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M1.H1.P1.Stress,
+simulatedResponse = PosteriorPredictions.fit.M1.H1.P1.Stress,
+observedResponse = observations.fit.M1.H1.P1.Stress,
+integerResponse = F
+)
+testDispersion.fit.M1.H1.P1.Stress <- testDispersion(DharmaM2.bayes.fit.M1.H1.P1.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M1.H1.P1.Stress)
+#Probability of Direction for model 1
+p_direction(fit.M1.H1.P1.Stress, method = "direct", null = 0)
+```
+#getting R2 fit.M1.H1.P1.Stress
+
+```{r}
+loo_R2(fit.M1.H1.P1.Stress)
+```
+
+#Plot posterior expectations
+```{r}
+# Expectation draws
+M1.H1.P1_epred <- fit.M1.H1.P1.Stress |>
+add_epred_draws(newdata = Stress2)
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_Specific_Season, .epred), alpha = 0.5) +
+labs(x = 'Season', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_Temp_A.s, .epred), alpha = 0.5) +
+labs(x = 'X1_Temp_A.s', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X3_Elephant_ID, .epred), alpha = 0.5) +
+labs(x = 'Elephant ID', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_Rainfall.s, .epred), alpha = 0.5) +
+labs(x = 'Rainfall', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_WindSpeed_A.s, .epred), alpha = 0.5) +
+labs(x = 'X2_WindSpeed_A.s', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_Water_Available, .epred), alpha = 0.5) +
+labs(x = 'X2_Water_Available', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_LOWHIGHDIFF.s, .epred), alpha = 0.5) +
+labs(x = 'Temp diff', y = 'fGCM_Conc')
+
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X2_Pressure_H.s, .epred), alpha = 0.5) +
+labs(x = 'X2_Pressure_L.s', y = 'fGCM_Conc')
+
+# Figure 4
+# tiff("Figure 4, M1.tiff", units="in", width=7, height=4, res=400)
+ggplot(M1.H1.P1_epred) +
+stat_halfeye(aes(X3_Elephant_ID, .epred), alpha = 0.5) +
+labs(x = 'ID', y = 'fGCM concentration') + theme(axis.ticks.length=unit(-0.25, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line=element_line(colour = 'black', size = 0.1), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.text = element_text(size=6, color="black", family="Helvetica"),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA), 
+        axis.title.x=element_text(family="Helvetica",size=10), 
+        legend.position = "none")
+```
+
+#MODEL 2
+##Build biophysical model 2, is fGCM concentration predicted by anthropogenic events on reserve
+```{r Build M2 H1 P1 model}
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M2.H1.P1.Stress <- bf(fGCM_Conc ~ X2_EventsOnFarm + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M2.H1.P1.Stress <- brm(M2.H1.P1.Stress, 
+data = Stress2, 
+family = skew_normal,
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M2 H1 P1 model: is it a good fit?
+```{r M2 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+#PP_Checks
+# tiff("fit.M2.H1.P1.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M2.H1.P1.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M2.H1.P1.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M2.H1.P1.Stress, type = "boxplot")
+
+#Dispersion Tests
+
+# tiff("dispersionM2.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M2.H1.P1.Stress <- predict(fit.M2.H1.P1.Stress, summary = FALSE)
+PosteriorPredictions.fit.M2.H1.P1.Stress <- t(PosteriorPredictions.fit.M2.H1.P1.Stress)
+medianPosteriorPredictions.fit.M2.H1.P1.Stress <- apply(PosteriorPredictions.fit.M2.H1.P1.Stress, 1, median)
+observations.fit.M2.H1.P1.Stress <- Stress2$fGCM_Conc
+DharmaM2.bayes.fit.M2.H1.P1.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M2.H1.P1.Stress,
+simulatedResponse = PosteriorPredictions.fit.M2.H1.P1.Stress,
+observedResponse = observations.fit.M2.H1.P1.Stress,
+integerResponse = F
+)
+testDispersion.fit.M2.H1.P1.Stress <- testDispersion(DharmaM2.bayes.fit.M2.H1.P1.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M2.H1.P1.Stress)
+#Probability of Direction for model 2
+p_direction(fit.M2.H1.P1.Stress, method = "direct", null = 0)
+```
+#getting R2 fit.M2.H1.P1.Stress
+```{r}
+loo_R2(fit.M2.H1.P1.Stress)
+```
+
+#Plot posterior expectations
+```{r}
+# Expectation draws
+M2.H1.P2_epred <- fit.M2.H1.P1.Stress |>
+add_epred_draws(newdata = Stress2)
+
+# Figure 1
+# tiff("Figure 1, M2.tiff", units="in", width=5, height=3, res=400)
+ggplot(M2.H1.P2_epred) +
+stat_halfeye(aes(X2_EventsOnFarm, .epred), alpha = 0.5) +
+labs(x = 'Human activity', y = 'fGCM concentration') + scale_x_discrete(labels=c("aNo" = "No Events", "Plane, Darting" = "Helicopter")) + theme(axis.ticks.length=unit(-0.25, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line=element_line(colour = 'black', size = 0.1), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.text = element_text(size=8, color="black", family="Helvetica"),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA), 
+        axis.title.x=element_text(family="Helvetica",size=10),
+        legend.position = "none") + ylim(-0.2,0.75)
+```
+#MODEL 3
+##Build social model is fGCM concentration predicted by social challenges i.e., aggression? 
+```{r Build M3 H1 P2 model}
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M3.H1.P2.Stress <- bf(fGCM_Conc ~ TotalAggressionsInitiatedStudyPeriod + TotalAggressionsReceivedStudyPeriod + DifferenceInAggressionStudyPeriod + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M3.H1.P2.Stress <- brm(M3.H1.P2.Stress, 
+data = Stress2, 
+family = skew_normal,
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M3 H1 P2 model: is it a good fit?
+```{r M3 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+#PP_Checks
+# tiff("fit.M3.H1.P2.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M3.H1.P2.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M3.H1.P2.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M3.H1.P2.Stress, type = "boxplot")
+
+#Dispersion Tests
+# tiff("dispersionM3.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M3.H1.P2.Stress <- predict(fit.M3.H1.P2.Stress, summary = FALSE)
+PosteriorPredictions.fit.M3.H1.P2.Stress <- t(PosteriorPredictions.fit.M3.H1.P2.Stress)
+medianPosteriorPredictions.fit.M3.H1.P2.Stress <- apply(PosteriorPredictions.fit.M3.H1.P2.Stress, 1, median)
+observations.fit.M3.H1.P2.Stress <- Stress2$fGCM_Conc
+DharmaM2.bayes.fit.M3.H1.P2.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M3.H1.P2.Stress,
+simulatedResponse = PosteriorPredictions.fit.M3.H1.P2.Stress,
+observedResponse = observations.fit.M3.H1.P2.Stress,
+integerResponse = F
+)
+testDispersion.fit.M3.H1.P2.Stress <- testDispersion(DharmaM2.bayes.fit.M3.H1.P2.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M3.H1.P2.Stress)
+#Probability of Direction for model 3
+p_direction(fit.M3.H1.P2.Stress, method = "direct", null = 0)
+```
+#Plot posterior expectations
+```{r}
+# Expectation draws
+M3.H1.P2_epred <- fit.M3.H1.P2.Stress |>
+add_epred_draws(newdata = Stress2)
+
+ggplot(M3.H1.P2_epred) +
+stat_halfeye(aes(TotalAggressionsInitiatedStudyPeriod, .epred), alpha = 0.5) +
+labs(x = 'AggressionInitiated', y = 'fGCM_Conc')
+
+ggplot(M3.H1.P2_epred) +
+stat_halfeye(aes(TotalAggressionsReceivedStudyPeriod, .epred), alpha = 0.5) +
+labs(x = 'AggressionReceived', y = 'fGCM_Conc')
+
+ggplot(M3.H1.P2_epred) +
+stat_halfeye(aes(DifferenceInAggressionStudyPeriod, .epred), alpha = 0.5) +
+labs(x = 'DifferenceInAggression', y = 'fGCM_Conc')
+```
+
+#getting R2 fit.M3.H1.P1.Stress
+```{r}
+loo_R2(fit.M3.H1.P2.Stress)
+```
+
+#MODEL 4
+##Build daily social model is fGCM concentration predicted by social challenges i.e., aggression? 
+```{r Build M4 H1 P2 model}
+#Subset to days where aggression data is available
+DailyStress <- Stress2[Stress2$TotalDailyAggressions_All_Individuals > 0, ]
+
+DailyStress$TotalDailyAggressions_All_Individuals <- scale(DailyStress$TotalDailyAggressions_All_Individuals, center = TRUE, scale = TRUE)
+DailyStress$DailyAggressionsInitiated_by_Individual <- scale(DailyStress$DailyAggressionsInitiated_by_Individual, center = TRUE, scale = TRUE)
+DailyStress$DailyAggressionsReceived_by_Individual <- scale(DailyStress$DailyAggressionsReceived_by_Individual, center = TRUE, scale = TRUE)
+DailyStress$TotalDailyAggressiveInteractionsIndividual <- scale(DailyStress$TotalDailyAggressiveInteractionsIndividual, center = TRUE, scale = TRUE)
+
+
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M4.H1.P2.Stress <- bf(fGCM_Conc ~ TotalDailyAggressions_All_Individuals + DailyAggressionsInitiated_by_Individual + DailyAggressionsReceived_by_Individual + TotalDailyAggressiveInteractionsIndividual + (1|X3_Elephant_ID) + offset(log(Individual_Count)))
+
+fit.M4.H1.P2.Stress <- brm(M4.H1.P2.Stress, 
+data = DailyStress, 
+family = skew_normal,
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.95,
+max_treedepth = 15), cores = 4)
+
+```
+
+##checking the M4 H1 P2 model: is it a good fit?
+```{r M4 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+#PP_Checks
+#tiff("fit.M4.H1.P2.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M3.H1.P2.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M4.H1.P2.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M4.H1.P2.Stress, type = "boxplot")
+
+#Dispersion Tests
+# tiff("dispersionM4.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M4.H1.P2.Stress <- predict(fit.M4.H1.P2.Stress, summary = FALSE)
+PosteriorPredictions.fit.M4.H1.P2.Stress <- t(PosteriorPredictions.fit.M4.H1.P2.Stress)
+medianPosteriorPredictions.fit.M4.H1.P2.Stress <- apply(PosteriorPredictions.fit.M4.H1.P2.Stress, 1, median)
+observations.fit.M4.H1.P2.Stress <- DailyStress$fGCM_Conc
+DharmaM2.bayes.fit.M4.H1.P2.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M4.H1.P2.Stress,
+simulatedResponse = PosteriorPredictions.fit.M4.H1.P2.Stress,
+observedResponse = observations.fit.M4.H1.P2.Stress,
+integerResponse = F
+)
+testDispersion.fit.M4.H1.P2.Stress <- testDispersion(DharmaM2.bayes.fit.M4.H1.P2.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M4.H1.P2.Stress)
+#Probability of Direction for model 4
+p_direction(fit.M4.H1.P2.Stress, method = "direct", null = 0)
+```
+#Plot posterior expectations M4
+```{r}
+# Expectation draws
+M4.H1.P2_epred <- fit.M4.H1.P2.Stress |>
+add_epred_draws(newdata = Stress2)
+
+ggplot(M4.H1.P2_epred) +
+stat_halfeye(aes(TotalDailyAggressions_All_Individuals, .epred), alpha = 0.5) +
+labs(x = 'Aggression ALL', y = 'fGCM_Conc')
+
+ggplot(M4.H1.P2_epred) +
+stat_halfeye(aes(DailyAggressionsInitiated_by_Individual, .epred), alpha = 0.5) +
+labs(x = 'Daily Aggressions Initiated', y = 'fGCM_Conc')
+
+ggplot(M4.H1.P2_epred) +
+stat_halfeye(aes(DailyAggressionsReceived_by_Individual, .epred), alpha = 0.5) +
+labs(x = 'Daily Aggression Received', y = 'fGCM_Conc')
+
+ggplot(M4.H1.P2_epred) +
+stat_halfeye(aes(TotalDailyAggressiveInteractionsIndividual, .epred), alpha = 0.5) +
+labs(x = 'Daily Aggression Individual total', y = 'fGCM_Conc')
+
+```
+
+#getting R2 fit.M4.H1.P2.Stress
+```{r}
+loo_R2(fit.M4.H1.P2.Stress)
+```
+
+#HYPOTHESIS 2############################################
+#MODEL 5
+##look at data FROM POST DARTING (MOST STRESSFUL EVENT)
+```{r load data from helicopter darting}
+#Data from 07/26/2023-08/02/2023
+StressDarting <- read.xlsx("~/Documents/PhD/StressData/StressData/RawData.xlsx", sheet = "PostDarting")
+
+StressDarting <- transform(StressDarting, fGCM_Conc = as.numeric(fGCM_Conc))
+
+StressDarting <- transform(StressDarting, Age = as.factor(Age))
+StressDarting <- transform(StressDarting, Sex = as.factor(Sex))
+StressDarting <- transform(StressDarting, AgeSex = as.factor(AgeSex))
+
+
+StressDarting$Dominance.s <- scale(StressDarting$Dominance_Rank, center = TRUE, scale = TRUE)
+StressDarting$Degree.s <- scale(StressDarting$Degree, center = TRUE, scale = TRUE)
+StressDarting$Betweenness.s <- scale(StressDarting$Betweenness, center = TRUE, scale = TRUE)
+
+```
+##M5.Build social buffering model (original skew_normal distribution model, presented in main text)
+```{r Build H2 P1 model}
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M5.H2.P1.Stress <- bf(fGCM_Conc ~ Age + Sex + Degree.s + Betweenness.s + Dominance.s + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M5.H2.P1.Stress <- brm(M5.H2.P1.Stress, 
+data = StressDarting, 
+family = skew_normal(),
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M5 H2 P1 model: is it a good fit?
+```{r M5 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+
+#PP_Checks
+# tiff("fit.M5.H2.P1.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M5.H2.P1.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M5.H2.P1.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M5.H2.P1.Stress, type = "boxplot")
+
+#Dispersion Tests
+# tiff("dispersionM5.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M5.H2.P1.Stress <- predict(fit.M5.H2.P1.Stress, summary = FALSE)
+PosteriorPredictions.fit.M5.H2.P1.Stress <- t(PosteriorPredictions.fit.M5.H2.P1.Stress)
+medianPosteriorPredictions.fit.M5.H2.P1.Stress <- apply(PosteriorPredictions.fit.M5.H2.P1.Stress, 1, median)
+observations.fit.M5.H2.P1.Stress <- StressDarting$fGCM_Conc
+DharmaM2.bayes.fit.M5.H2.P1.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M5.H2.P1.Stress,
+simulatedResponse = PosteriorPredictions.fit.M5.H2.P1.Stress,
+observedResponse = observations.fit.M5.H2.P1.Stress,
+integerResponse = F
+)
+testDispersion.fit.M5.H2.P1.Stress <- testDispersion(DharmaM2.bayes.fit.M5.H2.P1.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M5.H2.P1.Stress)
+#Probability of Direction for model 5
+p_direction(fit.M5.H2.P1.Stress, method = "direct", null = 0)
+```
+
+###Model 5 Plot posterior expectations
+```{r}
+# Expectation draws
+fit.M5.H2.P1.Stress_epred <- fit.M5.H2.P1.Stress |>
+add_epred_draws(newdata = StressDarting)
+
+ggplot(fit.M5.H2.P1.Stress_epred) +
+stat_halfeye(aes(Betweenness.s, .epred), alpha = 0.5) +
+labs(x = 'Betweenness', y = 'fGCM_Conc')
+
+ggplot(fit.M5.H2.P1.Stress_epred) +
+stat_halfeye(aes(Degree.s, .epred), alpha = 0.5) +
+labs(x = "Degree.s", y = "fGCM_Conc") 
+
+ggplot(fit.M5.H2.P1.Stress_epred) +
+stat_halfeye(aes(Age, .epred), alpha = 0.5) +
+labs(x = 'Age', y = 'fGCM_Conc')
+
+ggplot(fit.M5.H2.P1.Stress_epred) +
+stat_halfeye(aes(Dominance.s, .epred), alpha = 0.5) +
+labs(x = "Dominance", y = "fGCM_Conc")
+
+# Figure 2A
+# tiff("Figure 2A, M5.tiff", units="in", width=5, height=3, res=400)
+ggplot(fit.M5.H2.P1.Stress_epred) +
+stat_halfeye(aes(Sex, .epred), alpha = 0.5) +
+labs(x = 'Sex', y = 'fGCM concentration') + theme(axis.ticks.length=unit(-0.25, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line=element_line(colour = 'black', size = 0.1), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.text = element_text(size=8, color="black", family="Helvetica"),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA), 
+        axis.title.x=element_text(family="Helvetica",size=10),
+        legend.position = "none") + ylim(-0.01, 0.9)
+
+```
+###Model 5 plot DOMINANCE low vs.high individuals
+```{r}
+#dominancelow/high findings
+
+StressDartingNoNA <- StressDarting %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+
+M5.pLowRank <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=min(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=mean(StressDartingNoNA$Degree.s),
+Betweenness.s=mean(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pHighRank <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=max(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=mean(StressDartingNoNA$Degree.s),
+Betweenness.s=mean(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pRank <- rbind(M5.pLowRank, M5.pHighRank)
+
+fitted.M5.pRank <- fitted(fit.M5.H2.P1.Stress, newdata=M5.pRank,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M5.pRank <- as.data.frame(fitted.M5.pRank)
+names(fitted.M5.pRank) <- c( "F_ALowRank", "M_ALowRank", "F_HighRank", "M_HighRank")
+
+plotfitted.M5.Rank <- melt(fitted.M5.pRank)
+splitlowhigh.M2.Rank<-str_split_fixed(plotfitted.M5.Rank$variable,"_",2)
+plotfitted.M5.Rank <-cbind(plotfitted.M5.Rank, splitlowhigh.M2.Rank)
+pal <-brewer.pal(12,"Paired")
+
+# tiff("M5.FINAL_Rank Diff.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M5.Rank, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8, size=.4) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[5:6]),name=NULL, labels=c("Low rank", "High rank")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "right",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+
+###Model 5 plot DEGREE low vs.high individuals
+```{r}
+# StressDartingNoNA <- StressDarting %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+M5.pLowDegree <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=min(StressDartingNoNA$Degree.s),
+Betweenness.s=mean(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pHighDegree <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=max(StressDartingNoNA$Degree.s),
+Betweenness.s=mean(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pDegree <- rbind(M5.pLowDegree, M5.pHighDegree)
+
+fitted.M5.pDegree <- fitted(fit.M5.H2.P1.Stress, newdata=M5.pDegree,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M5.pDegree <- as.data.frame(fitted.M5.pDegree)
+names(fitted.M5.pDegree) <- c( "F_ALowDegree", "M_ALowDegree", "F_HighDegree", "M_HighDegree")
+
+plotfitted.M5.Degree <- melt(fitted.M5.pDegree)
+splitlowhigh.M2.Degree<-str_split_fixed(plotfitted.M5.Degree$variable,"_",2)
+plotfitted.M5.Degree <-cbind(plotfitted.M5.Degree, splitlowhigh.M2.Degree)
+# pal2 <-brewer.pal(12,"Pastel2")
+
+# tiff("M5.FINAL_Degree Diff.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M5.Degree, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8, size=.4) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[7:8]),name=NULL, labels=c("Low degree", "High degree")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "right",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+###Model 5 plot BETWEENNESS low vs.high individuals
+```{r}
+# StressDartingNoNA <- StressDarting %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+M5.pLowBetweenness <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=mean(StressDartingNoNA$Degree.s),
+Betweenness.s=min(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pHighBetweenness <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(StressDartingNoNA$Dominance.s),
+Age=mean(StressDartingNoNA$Age),
+Degree.s=mean(StressDartingNoNA$Degree.s),
+Betweenness.s=max(StressDartingNoNA$Betweenness.s),
+Individual_Count=mean(StressDartingNoNA$Individual_Count)
+)
+
+M5.pBetweenness <- rbind(M5.pLowBetweenness, M5.pHighBetweenness)
+
+fitted.M5.pBetweenness <- fitted(fit.M5.H2.P1.Stress, newdata=M5.pBetweenness,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M5.pBetweenness <- as.data.frame(fitted.M5.pBetweenness)
+names(fitted.M5.pBetweenness) <- c( "F_ALowBetweenness", "M_ALowBetweenness", "F_HighBetweenness", "M_HighBetweenness")
+
+plotfitted.M5.Betweenness <- melt(fitted.M5.pBetweenness)
+splitlowhigh.M2.Betweenness<-str_split_fixed(plotfitted.M5.Betweenness$variable,"_",2)
+plotfitted.M5.Betweenness <-cbind(plotfitted.M5.Betweenness, splitlowhigh.M2.Betweenness)
+
+# tiff("M5.FINAL_Betweenness Diff.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M5.Betweenness, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8, size=.4) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[9:10]),name=NULL, labels=c("Low betweenness", "High betweenness")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "right",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+#getting R2 fit.M5.H2.P1.Stress
+```{r}
+loo_R2(fit.M5.H2.P1.Stress)
+```
+
+#MODEL 5.2
+##M5.2.Build social buffering model (with Weibull distribution, presented in SM)
+```{r Build M5.2 H2 P1 model}
+
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M5.2.H2.P1.Stress <- bf(fGCM_Conc ~ Age + Sex + Degree.s + Betweenness.s + Dominance.s + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M5.2.H2.P1.Stress <- brm(M5.2.H2.P1.Stress, 
+data = StressDarting, 
+family = weibull,
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M5.2 H2 P1 model: is it a good fit?
+```{r M5.2 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+#PP_Checks
+# tiff("fit.M5.2.H2.P1.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M5.H2.P1.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M5.2.H2.P1.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M5.2.H2.P1.Stress, type = "boxplot")
+
+#Dispersion Tests
+# tiff("dispersionM5.2.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M5.2.H2.P1.Stress <- predict(fit.M5.2.H2.P1.Stress, summary = FALSE)
+PosteriorPredictions.fit.M5.2.H2.P1.Stress <- t(PosteriorPredictions.fit.M5.2.H2.P1.Stress)
+medianPosteriorPredictions.fit.M5.2.H2.P1.Stress <- apply(PosteriorPredictions.fit.M5.2.H2.P1.Stress, 1, median)
+observations.fit.M5.2.H2.P1.Stress <- StressDarting$fGCM_Conc
+DharmaM2.bayes.fit.M5.2.H2.P1.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M5.2.H2.P1.Stress,
+simulatedResponse = PosteriorPredictions.fit.M5.2.H2.P1.Stress,
+observedResponse = observations.fit.M5.2.H2.P1.Stress,
+integerResponse = F
+)
+testDispersion.fit.M5.2.H2.P1.Stress <- testDispersion(DharmaM2.bayes.fit.M5.2.H2.P1.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M5.2.H2.P1.Stress)
+#Probability of Direction for model 5
+p_direction(fit.M5.2.H2.P1.Stress, method = "direct", null = 0)
+```
+
+###Model 5.2 Plot posterior expectations
+```{r}
+# Expectation draws
+fit.M5.2.H2.P1.Stress_epred <- fit.M5.2.H2.P1.Stress |>
+add_epred_draws(newdata = StressDarting)
+
+ggplot(fit.M5.2.H2.P1.Stress_epred) +
+stat_halfeye(aes(Betweenness.s, .epred), alpha = 0.5) +
+labs(x = 'Betweenness', y = 'fGCM_Conc')
+
+ggplot(fit.M5.2.H2.P1.Stress_epred) +
+stat_halfeye(aes(Degree.s, .epred), alpha = 0.5) +
+labs(x = "Degree.s", y = "fGCM_Conc") 
+
+ggplot(fit.M5.2.H2.P1.Stress_epred) +
+stat_halfeye(aes(Age, .epred), alpha = 0.5) +
+labs(x = 'Age', y = 'fGCM_Conc')
+
+ggplot(fit.M5.2.H2.P1.Stress_epred) +
+stat_halfeye(aes(Sex, .epred), alpha = 0.5) +
+labs(x = 'Sex', y = 'fGCM_Conc')
+
+ggplot(fit.M5.2.H2.P1.Stress_epred) +
+stat_halfeye(aes(Dominance.s, .epred), alpha = 0.5) +
+labs(x = "Dominance", y = "fGCM_Conc")
+```
+
+#getting R2 fit.M5.2.H2.P1.Stress
+```{r}
+loo_R2(fit.M5.2.H2.P1.Stress)
+```
+
+#MODEL 6
+##look at data FROM ALL DATES EXCLUDING DARTING (MOST STRESSFUL EVENT)
+```{r load, center and scale data}
+##All data excluding darting event from 07/26/2023-08/02/2023
+
+AllData_NoDart <- read.xlsx("~/Documents/PhD/StressData/StressData/RawData.xlsx", sheet = "AllEXCEPTDarting")
+
+AllData_NoDart <- transform(AllData_NoDart, fGCM_Conc = as.numeric(fGCM_Conc))
+AllData_NoDart <- transform(AllData_NoDart, Age = as.factor(Age))
+AllData_NoDart <- transform(AllData_NoDart, Sex = as.factor(Sex))
+AllData_NoDart <- transform(AllData_NoDart, AgeSex = as.factor(AgeSex))
+
+
+AllData_NoDart$Dominance.s <- scale(AllData_NoDart$Dominance_Rank, center = TRUE, scale = TRUE)
+AllData_NoDart$Degree.s <- scale(AllData_NoDart$Degree, center = TRUE, scale = TRUE)
+AllData_NoDart$Betweenness.s <- scale(AllData_NoDart$Betweenness, center = TRUE, scale = TRUE)
+```
+##M6.Build social buffering model excluding stressful event (darting)
+```{r Build H2 P2 model}
+priors.BRMS.interceptb.norm<- c(
+
+set_prior("normal(0, 1)", class = "b")
+)
+
+M6.H2.P2.Stress <- bf(fGCM_Conc ~ Age + Sex + Degree.s + Betweenness.s + Dominance.s + (1|X3_Elephant_ID) + offset(log(Individual_Count))) 
+
+fit.M6.H2.P2.Stress <- brm(M6.H2.P2.Stress, 
+data = AllData_NoDart, 
+family = skew_normal,
+prior=priors.BRMS.interceptb.norm, 
+chains = 4,iter = 2500, 
+control=list(adapt_delta = 0.9,
+max_treedepth = 15), cores = 4)
+```
+
+##checking the M6 H2 P2 model: is it a good fit?
+```{r M6 dispersion checks and summary.}
+bayesplot::color_scheme_set("teal")
+
+#PP_Checks
+# tiff("fit.M6.H2.P2.Stress.PP_Check.tiff", units="in", width=4, height=3, res=400)
+pp_check(fit.M6.H2.P2.Stress) + theme(
+panel.background = element_rect(fill = "transparent", colour = NA),
+axis.line = element_line(
+size = 0.5,
+colour = "black",
+linetype = 1
+))
+
+pp_check(fit.M6.H2.P2.Stress, type = "dens") + theme(panel.background = element_rect(fill = "transparent", colour = NA))
+
+pp_check(fit.M6.H2.P2.Stress, type = "boxplot")
+
+#Dispersion Tests
+# tiff("dispersionM6.tiff", units="in", width=7, height=5, res=400)
+PosteriorPredictions.fit.M6.H2.P2.Stress <- predict(fit.M6.H2.P2.Stress, summary = FALSE)
+PosteriorPredictions.fit.M6.H2.P2.Stress <- t(PosteriorPredictions.fit.M6.H2.P2.Stress)
+medianPosteriorPredictions.fit.M6.H2.P2.Stress <- apply(PosteriorPredictions.fit.M6.H2.P2.Stress, 1, median)
+observations.fit.M6.H2.P2.Stress <- AllData_NoDart$fGCM_Conc
+DharmaM2.bayes.fit.M6.H2.P2.Stress <- createDHARMa(
+fittedPredictedResponse = medianPosteriorPredictions.fit.M6.H2.P2.Stress,
+simulatedResponse = PosteriorPredictions.fit.M6.H2.P2.Stress,
+observedResponse = observations.fit.M6.H2.P2.Stress,
+integerResponse = F
+)
+testDispersion.fit.M6.H2.P2.Stress <- testDispersion(DharmaM2.bayes.fit.M6.H2.P2.Stress, plot =
+T)
+
+#Summary of output
+summary(fit.M6.H2.P2.Stress)
+#Probability of Direction for model 6
+p_direction(fit.M6.H2.P2.Stress, method = "direct", null = 0)
+```
+###Model 6 Plot posterior expectations
+```{r}
+# Expectation draws
+fit.M6.H2.P2.Stress_epred <- fit.M6.H2.P2.Stress |>
+add_epred_draws(newdata = AllData_NoDart)
+
+ggplot(fit.M6.H2.P2.Stress_epred) +
+stat_halfeye(aes(Betweenness.s, .epred), alpha = 0.5) +
+labs(x = 'Betweenness', y = 'fGCM_Conc')
+
+ggplot(fit.M6.H2.P2.Stress_epred) +
+stat_halfeye(aes(Age, .epred), alpha = 0.5) +
+labs(x = 'Age', y = 'fGCM_Conc')
+
+ggplot(fit.M6.H2.P2.Stress_epred) +
+stat_halfeye(aes(Dominance.s, .epred), alpha = 0.5) +
+labs(x = "Dominance", y = "fGCM_Conc")
+
+# Figure 2B
+# tiff("Figure 2B, M6.tiff", units="in", width=5, height=3, res=400)
+ggplot(fit.M6.H2.P2.Stress_epred) +
+stat_halfeye(aes(Sex, .epred), alpha = 0.5) +
+labs(x = 'Sex', y = 'fGCM concentration') + theme(axis.ticks.length=unit(-0.25, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line=element_line(colour = 'black', size = 0.1), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.text = element_text(size=8, color="black", family="Helvetica"),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA), 
+        axis.title.x=element_text(family="Helvetica",size=10), 
+        legend.position = "none")  + scale_y_continuous(breaks = c(0.00, 0.25, 0.50, 0.75)) + ylim(-0.02,0.9)
+
+ggplot(fit.M6.H2.P2.Stress_epred) +
+stat_halfeye(aes(Degree.s, .epred), alpha = 0.5) +
+labs(x = "Degree", y = "fGCM concentration") 
+```
+###Model 6 plot DOMINANCE low vs.high individuals
+```{r}
+#dominancelow/high findings
+
+AllData_NoDartNoNA <- AllData_NoDart %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+
+M6.pLowRank <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=min(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=mean(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=mean(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pHighRank <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=max(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=mean(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=mean(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pRank <- rbind(M6.pLowRank, M6.pHighRank)
+
+fitted.M6.pRank <- fitted(fit.M6.H2.P2.Stress, newdata=M6.pRank,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M6.pRank <- as.data.frame(fitted.M6.pRank)
+names(fitted.M6.pRank) <- c( "F_ALowRank", "M_ALowRank", "F_HighRank", "M_HighRank")
+
+plotfitted.M6.Rank <- melt(fitted.M6.pRank)
+splitlowhigh.M6.Rank<-str_split_fixed(plotfitted.M6.Rank$variable,"_",2)
+plotfitted.M6.Rank <-cbind(plotfitted.M6.Rank, splitlowhigh.M6.Rank)
+pal <-brewer.pal(12,"Paired")
+
+#tiff("FINAL_Rank Diff.M6.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M6.Rank, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8, size=.4) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[5:6]),name=NULL, labels=c("Low rank", "High rank")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "bottom",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+
+###Model 6 plot DEGREE low vs.high individuals
+```{r}
+# AllData_NoDartNoNA <- AllData_NoDart %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+M6.pLowDegree <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=min(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=mean(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pHighDegree <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=max(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=mean(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pDegree <- rbind(M6.pLowDegree, M6.pHighDegree)
+
+fitted.M6.pDegree <- fitted(fit.M6.H2.P2.Stress, newdata=M6.pDegree,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M6.pDegree <- as.data.frame(fitted.M6.pDegree)
+names(fitted.M6.pDegree) <- c( "F_ALowDegree", "M_ALowDegree", "F_HighDegree", "M_HighDegree")
+
+plotfitted.M6.Degree <- melt(fitted.M6.pDegree)
+splitlowhigh.M6.Degree<-str_split_fixed(plotfitted.M6.Degree$variable,"_",2)
+plotfitted.M6.Degree <-cbind(plotfitted.M6.Degree, splitlowhigh.M6.Degree)
+
+# tiff("FINAL_Degree Diff.M6.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M6.Degree, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8, size=.4) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[7:8]),name=NULL, labels=c("Low degree", "High degree")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "bottom",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+
+###Model 6 plot BETWEENNESS low vs.high individuals
+```{r}
+# AllData_NoDartNoNA <- AllData_NoDart %>% select(Sex, Dominance.s, Age, Betweenness.s, Individual_Count, Degree.s, fGCM_Conc, X3_Elephant_ID)
+
+M6.pLowBetweenness <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=mean(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=min(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pHighBetweenness <- data.frame(
+Sex = c("F", "M"),
+Dominance.s=mean(AllData_NoDartNoNA$Dominance.s),
+Age=mean(AllData_NoDartNoNA$Age),
+Degree.s=mean(AllData_NoDartNoNA$Degree.s),
+Betweenness.s=max(AllData_NoDartNoNA$Betweenness.s),
+Individual_Count=mean(AllData_NoDartNoNA$Individual_Count)
+)
+
+M6.pBetweenness <- rbind(M6.pLowBetweenness, M6.pHighBetweenness)
+
+fitted.M6.pBetweenness <- fitted(fit.M6.H2.P2.Stress, newdata=M6.pBetweenness,
+re_formula=NA,summary=FALSE, scale="linear")
+
+fitted.M6.pBetweenness <- as.data.frame(fitted.M6.pBetweenness)
+names(fitted.M6.pBetweenness) <- c( "F_ALowBetweenness", "M_ALowBetweenness", "F_HighBetweenness", "M_HighBetweenness")
+
+plotfitted.M6.Betweenness <- melt(fitted.M6.pBetweenness)
+splitlowhigh.M6.Betweenness<-str_split_fixed(plotfitted.M6.Betweenness$variable,"_",2)
+plotfitted.M6.Betweenness <-cbind(plotfitted.M6.Betweenness, splitlowhigh.M6.Betweenness)
+
+#tiff("FINAL_Betweenness Diff.M6.tiff", units="in", width=5, height=3, res=400)
+ggplot(plotfitted.M6.Betweenness, aes(x=value, y=`1`)) + geom_density_ridges(aes(fill=`2`),
+alpha=.8) + coord_cartesian(clip = "off") + scale_y_discrete(labels=NULL) +
+scale_fill_manual(values=c(pal[9:10]),name=NULL, labels=c("Low betweenness", "High Betweenness")) + scale_x_continuous(limits=c(-2,3), breaks=c(-2,0,2,5)) +scale_y_discrete(expand=c(-.01,0),limits=c("F", "M"), labels=(c("F"= "Female", "M"="Male"))) +
+labs(x="Relative fGCM concentration", y=NULL)+
+theme(axis.line=element_line(colour = 'black', size = .5),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.text = element_text(size=12, color="black", family="Times New Roman"),
+panel.background = element_rect(fill = "transparent",colour = NA),
+plot.background = element_rect(fill = "transparent",colour = NA),
+axis.title.x=element_text(family="Times New Roman",size=12, vjust=-2),
+legend.position = "bottom",
+legend.text=element_text(size=12, family="Times New Roman"))
+
+```
+##Pairwise plots###
+```{r chechking that dominance, degree, and betweenness are not correlated}
+#Supplementary materials figure S1
+# tiff("Pub.Pairs1.tiff", units="in", width=6, height=6, res=400)
+pairs(fit.M6.H2.P2.Stress, variable = c("b_Dominance.s", "b_Degree.s"))
+# tiff("Pub.Pairs2.tiff", units="in", width=6, height=6, res=400)
+pairs(fit.M6.H2.P2.Stress, variable = c("b_Dominance.s", "b_Betweenness.s"))
+# tiff("Pub.Pairs3.tiff", units="in", width=6, height=6, res=400)
+pairs(fit.M6.H2.P2.Stress, variable = c("b_Betweenness.s", "b_Degree.s"))
+```
+```{r}
+cor(AllData_NoDart$Dominance.s, AllData_NoDart$Degree.s)
+cor(AllData_NoDart$Dominance.s, AllData_NoDart$Betweenness.s)
+cor(AllData_NoDart$Degree.s, AllData_NoDart$Betweenness.s)
+```
+#getting R2 fit.M6.H2.P2.Stress
+```{r}
+loo_R2(fit.M6.H2.P2.Stress)
+```
+
